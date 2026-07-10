@@ -56,6 +56,25 @@ const SUPPORTED_NATIVE_EMBEDDING_MODELS = {
       modelCard: "https://huggingface.co/intfloat/multilingual-e5-small",
     },
   },
+  "Xenova/bge-m3": {
+    maxConcurrentChunks: 2,
+    // Right now, this is NOT the token length, and is instead the number of characters
+    // that can be processed in a single pass. So we override to 16,000 characters.
+    // roughtly the max number of tokens assuming 2 characters per token. (undershooting)
+    // embeddingMaxChunkLength: 8192, (from the model card)
+    embeddingMaxChunkLength: 16_000,
+    chunkPrefix: "",
+    queryPrefix: "",
+    apiInfo: {
+      id: "Xenova/bge-m3",
+      name: "bge-m3",
+      description:
+        "A multilingual embedding model supporting 100+ languages with up to 8192 token context. Requires more processing power and memory.",
+      lang: "100+ languages",
+      size: "570MB",
+      modelCard: "https://huggingface.co/Xenova/bge-m3",
+    },
+  },
 };
 
 module.exports = {

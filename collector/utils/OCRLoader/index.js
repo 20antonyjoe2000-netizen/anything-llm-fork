@@ -212,6 +212,97 @@ class OCRLoader {
   }
 
   /**
+   * Full-page OCR using pdftoppm to render every page as an image, then Tesseract.
+   * Captures text inside screenshots, diagrams, and workflow images in PDFs.
+   * Uses a parallel worker pool for speed.
+   * @param {string} filePath - Path to PDF file
+   * @param {Object} options
+   * @param {number} options.maxWorkers - Max parallel Tesseract workers (default: cpu count capped at 4)
+   * @param {number} options.maxExecutionTime - Timeout ms (default 300s)
+   * @returns {Promise<Map<number, string>>} 1-indexed page number -> OCR text
+   */
+  async fullPageOCRPdf(filePath, { maxWorkers = null, maxExecutionTime = 300_000 } = {}) {
+    const { execSync } = require("child_process");
+    const { createWorker, OEM } = require("tesseract.js");
+    const results = new Map();
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "anyllm-pages-"));
+    const NUM_WORKERS = maxWorkers ?? Math.min(os.cpus().length, 4);
+    let workerPool = [];
+
+    try {
+      this.log(`Rendering pages via pdftoppm: ${path.basename(filePath)}`);
+      execSync(
+        `pdftoppm -png -r 150 "${filePath}" "${path.join(tmpDir, "page")}"`,
+        { timeout: 300_000 }
+      );
+
+      const pageFiles = fs
+        .readdirSync(tmpDir)
+        .filter((f) => f.endsWith(".png"))
+        .sort();
+
+      this.log(
+        `Rendered ${pageFiles.length} pages, running OCR with ${NUM_WORKERS} workers...`
+      );
+
+      workerPool = await Promise.all(
+        Array(NUM_WORKERS)
+          .fill(0)
+          .map(() =>
+            createWorker(this.language, OEM.LSTM_ONLY, {
+              cachePath: this.cacheDir,
+            })
+          )
+      );
+
+      const queue = [...pageFiles];
+      const startTime = Date.now();
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`fullPageOCRPdf timed out after ${maxExecutionTime / 1000}s`)),
+          maxExecutionTime
+        )
+      );
+
+      const processQueue = async () => {
+        await Promise.all(
+          workerPool.map(async (worker, i) => {
+            while (queue.length > 0) {
+              const file = queue.shift();
+              if (!file) break;
+              const match = file.match(/page-(\d+)\.png$/);
+              if (!match) continue;
+              const pageNum = parseInt(match[1], 10);
+              this.log(`[Worker ${i + 1}] OCR pg${pageNum}`);
+              const { data } = await worker.recognize(
+                path.join(tmpDir, file),
+                {},
+                "text"
+              );
+              if (data.text?.trim().length > 0) results.set(pageNum, data.text);
+            }
+          })
+        );
+      };
+
+      await Promise.race([timeoutPromise, processQueue()]);
+      this.log(
+        `Full-page OCR done: ${results.size}/${pageFiles.length} pages with content — ${((Date.now() - startTime) / 1000).toFixed(1)}s`
+      );
+    } catch (e) {
+      this.log(`fullPageOCRPdf error: ${e.message}`);
+    } finally {
+      await Promise.all(workerPool.map((w) => w.terminate().catch(() => {})));
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch (_) {}
+    }
+
+    return results;
+  }
+
+  /**
    * Loads an image file and returns the OCRed text.
    * @param {string} filePath - The path to the image file.
    * @param {Object} options - The options for the OCR.

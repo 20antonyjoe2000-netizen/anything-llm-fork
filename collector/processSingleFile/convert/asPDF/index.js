@@ -21,25 +21,42 @@ async function asPdf({
 
   console.log(`-- Working ${filename} --`);
   const pageContent = [];
-  let docs = await pdfLoader.load();
+  const textDocs = await pdfLoader.load();
 
-  if (docs.length === 0) {
-    console.log(
-      `[asPDF] No text content found for ${filename}. Will attempt OCR parse.`
-    );
-    docs = await new OCRLoader({
-      targetLanguages: options?.ocr?.langList,
-    }).ocrPDF(fullFilePath);
+  // Build per-page text map from direct extraction
+  const textByPage = new Map();
+  for (const doc of textDocs) {
+    const pg = doc.metadata?.loc?.pageNumber;
+    if (pg) textByPage.set(pg, doc.pageContent || "");
   }
 
-  for (const doc of docs) {
+  // Always run full-page OCR to capture screenshots and workflow diagrams
+  const ocrLoader = new OCRLoader({ targetLanguages: options?.ocr?.langList });
+  const ocrByPage = await ocrLoader.fullPageOCRPdf(fullFilePath);
+
+  // Merge: prefer direct text extraction; fall back to OCR for screenshot-heavy pages
+  const MIN_TEXT_CHARS = 100;
+  const allPages = new Set([...textByPage.keys(), ...ocrByPage.keys()]);
+
+  if (allPages.size > 0) {
+    for (const pg of [...allPages].sort((a, b) => a - b)) {
+      console.log(`-- Parsing content from pg ${pg} --`);
+      const text = textByPage.get(pg) || "";
+      const ocr = ocrByPage.get(pg) || "";
+      const chosen = text.length >= MIN_TEXT_CHARS ? text : ocr || text;
+      if (chosen.trim().length > 0) pageContent.push(chosen);
+    }
+  }
+
+  // Last-resort fallback for fully-scanned PDFs with no extractable images
+  if (pageContent.length === 0 && textDocs.length === 0) {
     console.log(
-      `-- Parsing content from pg ${
-        doc.metadata?.loc?.pageNumber || "unknown"
-      } --`
+      `[asPDF] No content after merge for ${filename}. Attempting embedded-image OCR.`
     );
-    if (!doc.pageContent || !doc.pageContent.length) continue;
-    pageContent.push(doc.pageContent);
+    const fallbackDocs = await ocrLoader.ocrPDF(fullFilePath);
+    for (const doc of fallbackDocs) {
+      if (doc.pageContent?.length) pageContent.push(doc.pageContent);
+    }
   }
 
   if (!pageContent.length) {
@@ -59,11 +76,11 @@ async function asPdf({
     title: metadata.title || filename,
     docAuthor:
       metadata.docAuthor ||
-      docs[0]?.metadata?.pdf?.info?.Creator ||
+      textDocs[0]?.metadata?.pdf?.info?.Creator ||
       "no author found",
     description:
       metadata.description ||
-      docs[0]?.metadata?.pdf?.info?.Title ||
+      textDocs[0]?.metadata?.pdf?.info?.Title ||
       "No description found.",
     docSource: metadata.docSource || "pdf file uploaded by the user.",
     chunkSource: metadata.chunkSource || "",
