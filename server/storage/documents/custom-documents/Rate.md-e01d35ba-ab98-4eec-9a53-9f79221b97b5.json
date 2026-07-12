@@ -1,0 +1,13 @@
+{
+    "id": "e01d35ba-ab98-4eec-9a53-9f79221b97b5",
+    "url": "file:///home/joe/App/anythingllm/collector/hotdir/Rate.md",
+    "title": "Rate.md",
+    "docAuthor": "Unknown",
+    "description": "Unknown",
+    "docSource": "a text file uploaded by the user.",
+    "chunkSource": "",
+    "published": "7/10/2026, 8:59:06 PM",
+    "wordCount": 232,
+    "pageContent": "# Deposit Rates\n\nInterest rates for Fixed Deposit (FD), Term Deposit, and Money Multiplier Deposit (MMD).\nRevised rates effective from 05.06.2026, expressed as percentage per annum (% p.a.).\nApplicable for all tenors and periods from 7 days to above 5 years.\nSpecial named products: IND Supreme 2.0 (300 Days) at 6.30%, Ind Green (500 Days) at 6.40%,\nInd Grow (555 Days) at 6.80%, Ind Prosper (777 Days) at 6.75%.\n\n| Period / Tenor of Deposit | Revised Rate (w.e.f. 05.06.2026) (% p.a.) |\n|---|---|\n| 7 days to 14 days | 2.80 |\n| 15 days to 29 days | 2.80 |\n| 30 days to 45 days | 3.00 |\n| 46 days to 90 days | 3.25 |\n| 91 days to 120 days | 3.50 |\n| 121 days to 180 days | 3.85 |\n| 181 days to less than 9 months | 4.50 |\n| 9 months to less than 1 year (Except 300 days) | 4.75 |\n| IND Supreme 2.0 (300 Days) | 6.30 |\n| 1 year | 6.10 |\n| Above 1 year to less than 2 years (Except 500 & 555 days) | 6.20 |\n| Ind Green (500 Days) | 6.40 |\n| Ind Grow (555 Days) | 6.80 |\n| 2 years to less than 3 years (Except 777 days) | 6.15 |\n| Ind Prosper (777 Days) | 6.75 |\n| 3 years to less than 5 years | 6.05 |\n| 5 year | 6.00 |\n| Above 5 years | 6.00 |\n",
+    "token_count_estimate": 428
+}
