@@ -1333,7 +1333,7 @@ async function updateENV(newENVs = {}, force = false, userId = null) {
     await runAfterAllFunc(newValues, userId);
 
   await logChangesToEventLog(newValues, userId);
-  if (process.env.NODE_ENV === "production") dumpENV();
+  dumpENV();
   return { newValues, error: error?.length > 0 ? error : false };
 }
 
