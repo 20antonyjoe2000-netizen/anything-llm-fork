@@ -118,6 +118,37 @@ class TextSplitter {
   }
 
   /**
+   * Detects structured section headings (e.g. "4.11 Closure of Locker Account",
+   * "Chapter 4 Locker Management") and prepends the most recent heading to any
+   * chunk that does not already begin with one. Ensures body chunks produced by
+   * splitting a section carry the section title in their embedded text, improving
+   * semantic retrieval accuracy for structured documents like banking manuals.
+   * @param {string[]} chunks
+   * @returns {string[]}
+   */
+  static injectSectionHeadings(chunks = []) {
+    // Matches dotted numeric sections ("4.11 Closure of Locker Account") and
+    // word-prefixed sections ("Chapter 4 ...", "Section 4.11 ...").
+    // Anchored to firstLine only to avoid matching numbered list items mid-chunk.
+    const HEADING_RE =
+      /^(?:\d{1,3}(?:\.\d{1,3}){0,3}\s+\S.{2,80}|(?:chapter|section)\s+[\d.]+\s+\S.{2,80})/i;
+    let lastHeading = null;
+    return chunks.map((chunk) => {
+      const firstLine = chunk.trimStart().split("\n")[0];
+      if (HEADING_RE.test(firstLine)) {
+        lastHeading = firstLine.trim();
+        return chunk;
+      }
+      if (lastHeading) {
+        // Guard: skip if heading already present in first 120 chars (e.g. via chunkHeader).
+        if (chunk.slice(0, 120).includes(lastHeading)) return chunk;
+        return `${lastHeading}\n\n${chunk}`;
+      }
+      return chunk;
+    });
+  }
+
+  /**
    * Apply the chunk prefix to the text if it is present.
    * @param {string} text - The text to apply the prefix to.
    * @returns {string} The text with the embedder model prefix applied.
@@ -156,16 +187,17 @@ class TextSplitter {
   #setSplitter(config = {}) {
     // if (!config?.splitByFilename) {// TODO do something when specific extension is present? }
     return new RecursiveSplitter({
-      chunkSize: isNaN(config?.chunkSize) ? 1_000 : Number(config?.chunkSize),
+      chunkSize: isNaN(config?.chunkSize) ? 2_000 : Number(config?.chunkSize),
       chunkOverlap: isNaN(config?.chunkOverlap)
-        ? 20
+        ? 200
         : Number(config?.chunkOverlap),
       chunkHeader: this.stringifyHeader(),
     });
   }
 
   async splitText(documentText) {
-    return this.#splitter._splitText(documentText);
+    const chunks = await this.#splitter._splitText(documentText);
+    return TextSplitter.injectSectionHeadings(chunks);
   }
 }
 

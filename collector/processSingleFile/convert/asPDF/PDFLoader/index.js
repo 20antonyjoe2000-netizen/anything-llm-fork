@@ -1,4 +1,4 @@
-const fs = require("fs").promises;
+const { extractPdfText } = require("./pdfExtractor");
 
 class PDFLoader {
   constructor(filePath, { splitPages = true } = {}) {
@@ -7,90 +7,45 @@ class PDFLoader {
   }
 
   async load() {
-    const buffer = await fs.readFile(this.filePath);
-    const { getDocument, version } = await this.getPdfJS();
+    const { pages, method, pdfMeta } = await extractPdfText(this.filePath);
 
-    const pdf = await getDocument({
-      data: new Uint8Array(buffer),
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true,
-    }).promise;
+    const sharedPdf = {
+      version: pdfMeta?.version ?? null,
+      info: pdfMeta?.info ?? null,
+      metadata: pdfMeta?.metadata ?? null,
+      totalPages: pdfMeta?.totalPages ?? pages.length,
+      extractionMethod: method,
+    };
 
-    const meta = await pdf.getMetadata().catch(() => null);
-    const documents = [];
-
-    for (let i = 1; i <= pdf.numPages; i += 1) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-
-      if (content.items.length === 0) {
-        continue;
-      }
-
-      let lastY;
-      const textItems = [];
-      for (const item of content.items) {
-        if ("str" in item) {
-          if (lastY === item.transform[5] || !lastY) {
-            textItems.push(item.str);
-          } else {
-            textItems.push(`\n${item.str}`);
-          }
-          lastY = item.transform[5];
-        }
-      }
-
-      const text = textItems.join("");
-      documents.push({
+    const documents = pages
+      .filter((p) => p.text.trim().length > 0)
+      .map(({ pageNumber, text }) => ({
         pageContent: text.trim(),
         metadata: {
           source: this.filePath,
-          pdf: {
-            version,
-            info: meta?.info,
-            metadata: meta?.metadata,
-            totalPages: pdf.numPages,
-          },
-          loc: { pageNumber: i },
+          pdf: sharedPdf,
+          loc: { pageNumber },
         },
-      });
-    }
+      }));
 
-    if (this.splitPages) {
-      return documents;
-    }
+    if (this.splitPages) return documents;
 
-    if (documents.length === 0) {
-      return [];
-    }
+    if (documents.length === 0) return [];
+
+    const joined = documents
+      .map((d, i) =>
+        i === 0
+          ? d.pageContent
+          : `\n\n--- Page ${d.metadata.loc.pageNumber} ---\n\n${d.pageContent}`
+      )
+      .join("");
 
     return [
       {
-        pageContent: documents.map((doc) => doc.pageContent).join("\n\n"),
-        metadata: {
-          source: this.filePath,
-          pdf: {
-            version,
-            info: meta?.info,
-            metadata: meta?.metadata,
-            totalPages: pdf.numPages,
-          },
-        },
+        pageContent: joined,
+        metadata: { source: this.filePath, pdf: sharedPdf },
       },
     ];
-  }
-
-  async getPdfJS() {
-    try {
-      const pdfjs = await import("pdf-parse/lib/pdf.js/v1.10.100/build/pdf.js");
-      return { getDocument: pdfjs.getDocument, version: pdfjs.version };
-    } catch (e) {
-      console.error(e);
-      throw new Error(
-        "Failed to load pdf-parse. Please install it with eg. `npm install pdf-parse`."
-      );
-    }
   }
 }
 

@@ -36,6 +36,9 @@ async function asPdf({
 
   // Merge: prefer direct text extraction; fall back to OCR for screenshot-heavy pages
   const MIN_TEXT_CHARS = 100;
+  // If OCR captured 150+ more chars than text extraction, it likely found
+  // screenshot/UI content embedded as images — combine both to preserve all info
+  const OCR_SCREENSHOT_BONUS = 150;
   const allPages = new Set([...textByPage.keys(), ...ocrByPage.keys()]);
 
   if (allPages.size > 0) {
@@ -43,7 +46,13 @@ async function asPdf({
       console.log(`-- Parsing content from pg ${pg} --`);
       const text = textByPage.get(pg) || "";
       const ocr = ocrByPage.get(pg) || "";
-      const chosen = text.length >= MIN_TEXT_CHARS ? text : ocr || text;
+      const chosen = (() => {
+        if (text.length >= MIN_TEXT_CHARS)
+          return ocr.length > text.length + OCR_SCREENSHOT_BONUS
+            ? text + "\n\n" + ocr
+            : text;
+        return ocr || text;
+      })();
       if (chosen.trim().length > 0) pageContent.push(chosen);
     }
   }
